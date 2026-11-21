@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connexion — Darek</title>
+<link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+<div id="site-header"></div>
+<div class="auth-wrap">
+  <div class="auth-side">
+    <h2 data-i18n="a.sideT"></h2>
+    <ul><li data-i18n="a.side1"></li><li data-i18n="a.side2"></li><li data-i18n="a.side3"></li></ul>
+  </div>
+  <div class="auth-form"><div class="auth-card" id="authCard"></div></div>
+</div>
+
+<script src="js/data.js?v=3"></script>
+<script src="js/i18n.js"></script>
+<script src="js/layout.js?v=3"></script>
+<script>
+document.addEventListener('darek:ready', ()=>{
+  const card = document.getElementById('authCard');
+  let tab = location.hash==='#inscription' ? 'signup' : 'login';
+  function render(){
+    const u = currentUser();
+    if(u){
+      const mine = store.get('darek_listings', []), favs = store.get('darek_favs', []);
+      card.innerHTML = `<h2 style="color:var(--navy)">${t('misc.welcome')}, ${u.name}</h2>
+        <p style="color:var(--muted);margin:6px 0 20px">${u.email}</p>
+        <div class="panel"><b>${t('nav.publish')}</b> : ${mine.length} · ♥ ${favs.length}</div>
+        <a href="publier.html" class="btn btn-primary btn-block" style="margin-bottom:10px">${t('nav.publish')}</a>
+        <button class="btn btn-ghost btn-block" id="logout">${t('nav.logout')}</button>`;
+      document.getElementById('logout').onclick = ()=>{ store.set('darek_user', null); location.reload(); };
+      return;
+    }
+    card.innerHTML = `
+      <div class="auth-tabs"><button class="${tab==='login'?'on':''}" data-tab="login">${t('a.login')}</button><button class="${tab==='signup'?'on':''}" data-tab="signup">${t('a.signup')}</button></div>
+      <form id="authForm">
+        ${tab==='signup'?`<div class="form-row"><label>${t('a.fullname')}</label><input name="name" required></div>
+                         <div class="form-row"><label>${t('a.phone')}</label><input name="phone" type="tel" required placeholder="05 xx xx xx xx"></div>`:''}
+        <div class="form-row"><label>${t('a.email')}</label><input name="email" type="email" required></div>
+        <div class="form-row"><label>${t('a.password')}</label><input name="password" type="password" required minlength="6"></div>
+        ${tab==='login'?`<div style="text-align:end;margin:-4px 0 14px"><a href="#" style="font-size:13px;font-weight:600;color:var(--accent)">${t('a.forgot')}</a></div>`:''}
+        <button class="btn btn-primary btn-block btn-lg">${t(tab==='login'?'a.loginBtn':'a.signupBtn')}</button>
+      </form>
+      <div style="text-align:center;color:var(--muted);margin:16px 0">${t('a.or')}</div>
+      <button class="btn btn-ghost btn-block" type="button">G&nbsp; ${t('a.google')}</button>`;
+    card.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render();});
+    document.getElementById('authForm').onsubmit = e=>{
+      e.preventDefault(); const f = new FormData(e.target);
+      const email = f.get('email');
+      store.set('darek_user', {name:f.get('name')||email.split('@')[0], email, phone:f.get('phone')||''});
+      location.href = 'index.html';
+    };
+  }
+  render();
+});
+</script>
+</body>
+</html>

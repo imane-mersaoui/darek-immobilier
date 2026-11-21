@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Annonce — Darek</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+<div id="site-header"></div>
+<main class="container" id="detail"></main>
+<div id="site-footer"></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/i18n.js"></script>
+<script src="js/layout.js?v=3"></script>
+<script src="js/search.js?v=3"></script>
+<script src="js/map.js?v=3"></script>
+<script>
+document.addEventListener('darek:ready', ()=>{
+  const root = document.getElementById('detail');
+  const l = getListing(qs('id'));
+  if(!l){ root.innerHTML = `<div class="empty" style="margin:60px 0"><h3>${t('d.notFound')}</h3><a class="btn btn-primary" href="index.html" style="margin-top:14px">Darek</a></div>`; return; }
+  document.title = l.title + ' — Darek';
+  const back = qs('back') ? 'annonces.html'+qs('back') : 'annonces.html?mode='+l.mode;
+  const yn = v => v==null ? '—' : (v ? t('f.yes') : t('f.no'));
+  const imgs = l.images.length ? l.images : [''];
+  const g = [0,1,2,3,4].map(i=>imgs[i % imgs.length]);
+
+  const feats = [[t('f.type'), tv(l.type)], [t('f.surface'), l.surface+' m²'], [t('f.rooms'), l.rooms||'—']];
+  if(l.mode==='vente'||l.mode==='location'){
+    feats.push([t('f.year'), l.year||'—'],[t('f.furnished'),yn(l.furnished)],[t('f.parking'),yn(l.parking)],[t('f.heating'),tv(l.heating)],[t('f.elevator'),yn(l.elevator)],[t('f.condition'),tv(l.condition)],[t('f.negotiable'),yn(l.negotiable)],[t('f.access'),yn(l.accessible)]);
+    if(l.duration) feats.push([t('f.duration'), tv(l.duration)]);
+  } else if(l.mode==='colocation'){
+    feats.push([t('f.roommates'), l.roommates],[t('f.bathrooms').replace(/ \(.*\)/,''), l.bathrooms],[t('f.common'),yn(l.commonRoom)],[t('f.furnished'),yn(l.furnished)],[t('f.parking'),yn(l.parking)],[t('f.elevator'),yn(l.elevator)],[t('f.access'),yn(l.accessible)],[t('f.duration'),tv(l.duration)]);
+  } else {
+    feats.push([t('f.guests'), l.guests],[t('f.furnished'),yn(l.furnished)],[t('f.parking'),yn(l.parking)],[t('f.elevator'),yn(l.elevator)],[t('f.access'),yn(l.accessible)],[t('f.internet'),yn(l.internet)],[t('f.kitchen'),yn(l.kitchen)]);
+  }
+  const k4 = l.mode==='vacances'
+    ? [[l.rooms||'—',t('d.rooms')],[l.surface+' m²',t('d.surface')],[l.guests,t('f.guests')],[l.internet?'✓':'—',t('f.internet')]]
+    : [[l.rooms||'—',t('d.rooms')],[l.surface+' m²',t('d.surface')],[l.year||'—',t('d.year')],[tv(l.condition),t('d.condition')]];
+
+  const contactForm = `
+    <button class="btn btn-navy btn-block" id="phoneBtn" style="margin-bottom:12px">📞 ${t('d.showPhone')}</button>
+    <form id="msgForm">
+      <div class="form-row"><label>${t('d.name')}</label><input required value="${currentUser()?.name||''}"></div>
+      <div class="form-row"><label>${t('d.phone')}</label><input type="tel" required></div>
+      <div class="form-row"><label>${t('d.msg')}</label><textarea rows="3" placeholder="${t('d.msgPh')}"></textarea></div>
+      <button class="btn btn-primary btn-block">${t('d.send')}</button>
+    </form>`;
+
+  root.innerHTML = `
+    <div style="padding-top:22px"><a href="${back}" style="font-weight:700;color:var(--muted)">← ${t('d.back')}</a></div>
+    <div class="gallery">${g.map(src=>`<div style="background-image:url('${src}')"></div>`).join('')}</div>
+    <div class="detail-layout">
+      <div>
+        <div class="detail-head">
+          <span class="badge ${l.mode}" style="position:static;display:inline-block;margin-bottom:10px">${t('mode.'+l.mode)}</span>
+          <span style="color:var(--muted);font-size:13px;margin-inline-start:8px">${t('d.ref')} ${l.id}</span>
+          <h1>${tv(l.type)} · ${l.title}</h1>
+          <div class="card-loc">${ICON.pin} ${l.district}${l.district!==l.city?', '+l.city:''}</div>
+          <div class="price" style="font-size:28px;margin-top:10px">${fmtPrice(l)}${l.negotiable?`<span class="tag-nego">${t('card.nego')}</span>`:''}</div>
+        </div>
+        <div class="keyfacts">${k4.map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join('')}</div>
+        <div class="panel"><h2>${t('d.desc')}</h2><p style="color:#3c4652">${l.description}</p></div>
+        <div class="panel"><h2>${t('d.features')}</h2><div class="features">${feats.map(([a,b])=>`<div><span>${a}</span><span>${b}</span></div>`).join('')}</div></div>
+        <div class="panel"><h2>${t('d.location')} · ${l.district}, ${l.city}</h2><div class="mini-map" id="miniMap"></div>
+          <p style="color:var(--muted);font-size:13px;margin-top:10px">${t('d.approx')}</p>
+          <a class="btn btn-ghost" style="margin-top:10px" href="annonces.html?mode=${l.mode}&loc=${encodeURIComponent(l.city)}&view=map">🗺 ${t('mode.'+l.mode)} · ${l.city}</a></div>
+        <a href="contact.html" style="font-size:13px;color:var(--muted);text-decoration:underline">${t('d.report')}</a>
+      </div>
+      <aside class="owner-card">
+        <div class="panel">
+          <div class="owner"><div class="avatar">${l.owner.name[0]}</div><div><b>${l.owner.name}</b><div style="font-size:13px;color:var(--muted)">${t('d.owner')} · ${t('d.memberSince')} ${l.owner.since}</div></div></div>
+          <div class="no-fee">${ICON.check} ${t('d.noFee')}</div>
+          ${l.mode==='vacances' ? `<div id="booking"></div><div style="height:14px"></div>` : ''}
+          ${contactForm}
+        </div>
+      </aside>
+    </div>
+    <section style="padding-bottom:60px"><div class="section-head"><h2>${t('d.similar')}</h2></div><div class="grid-listings" id="similar"></div></section>`;
+
+  document.getElementById('phoneBtn').onclick = e=>{ e.target.textContent = '📞 ' + l.owner.phone; e.target.setAttribute('dir','ltr'); };
+  document.getElementById('msgForm').onsubmit = e=>{ e.preventDefault(); e.target.reset(); toast(t('d.sent')); };
+
+  if(l.mode==='vacances'){
+    const bs = {arr:qs('arr')||'', dep:qs('dep')||'', guests:+(qs('guests')||1)}; let off=0;
+    const box = document.getElementById('booking');
+    const draw = ()=>{
+      const n = bs.arr&&bs.dep ? nightsBetween(bs.arr,bs.dep) : 0;
+      box.innerHTML = `<div style="font-size:13px" class="booking-cal">${calendarHTML(bs,off,l.booked,1)}</div>
+        <div class="form-row" style="margin-top:12px"><label>${t('f.guests')}</label><div class="stepper"><button type="button" data-g="-1">−</button><span>${bs.guests}</span><button type="button" data-g="1">+</button><small style="color:var(--muted)">max ${l.guests}</small></div></div>
+        ${n>0?`<div class="book-total"><span>${fmtNum(l.price)} DA × ${n} ${t('d.nights')}</span><span>${fmtNum(l.price*n)} DA</span></div>`:''}
+        <button class="btn btn-primary btn-block" id="bookBtn" ${n>0?'':'disabled style="opacity:.5"'}>${t('d.book')}</button>`;
+    };
+    box.addEventListener('click', e=>{
+      const d = e.target.closest('[data-day]'), c = e.target.closest('[data-cal]'), gb = e.target.closest('[data-g]');
+      if(d && !d.matches('.past,.booked')){
+        pickDay(bs, d.dataset.day);
+        if(bs.dep && l.booked.some(x=>x>=bs.arr && x<bs.dep)){ bs.arr=d.dataset.day; bs.dep=''; }
+        draw();
+      }
+      if(c){ off=Math.max(0,off+(+c.dataset.cal)); draw(); }
+      if(gb){ bs.guests=Math.max(1,Math.min(l.guests,bs.guests+(+gb.dataset.g))); draw(); }
+      if(e.target.id==='bookBtn'){ toast(t('d.sent')); }
+    });
+    draw();
+  }
+
+  const mm = makeBaseMap(document.getElementById('miniMap'), {center:geoOf(l), zoom:14, scroll:false});
+  L.circle(geoOf(l), {radius:300, color:'#e4572e', weight:2, fillOpacity:.18}).addTo(mm);
+
+  const sim = LISTINGS.filter(x=>x.mode===l.mode && x.id!==l.id).sort((a,b)=>(b.city===l.city)-(a.city===l.city)).slice(0,4);
+  document.getElementById('similar').innerHTML = sim.map(cardHTML).join('');
+});
+</script>
+</body>
+</html>

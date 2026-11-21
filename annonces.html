@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Annonces — Darek</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/style.css?v=3">
+<style>@media (max-width:900px){.vt-split{display:none!important}}</style>
+</head>
+<body>
+<div id="site-header"></div>
+
+<div class="results-top"><div class="container"><div id="search"></div></div><div style="height:20px"></div></div>
+
+<main class="container" style="padding-bottom:60px">
+  <div class="results-bar">
+    <h1 id="resTitle"></h1>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div class="view-toggle" id="viewToggle">
+        <button data-view="list">☰ <span data-i18n="map.list"></span></button>
+        <button data-view="split" class="vt-split">▦ <span data-i18n="map.split"></span></button>
+        <button data-view="map">🗺 <span data-i18n="map.map"></span></button>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:700"><span data-i18n="res.sort"></span>
+        <select id="sort">
+          <option value="recent" data-i18n="res.recent"></option>
+          <option value="asc" data-i18n="res.priceAsc"></option>
+          <option value="desc" data-i18n="res.priceDesc"></option>
+          <option value="surface" data-i18n="res.surface"></option>
+        </select></label>
+    </div>
+  </div>
+  <div class="active-filters" id="activeFilters"></div>
+
+  <div class="results-split" id="split">
+    <div class="list-col"><div class="grid-listings" id="results"></div></div>
+    <div class="map-col">
+      <div class="map-box" id="map"></div>
+      <div class="map-tools">
+        <label><input type="checkbox" id="moveSearch"> <span data-i18n="map.moving"></span></label>
+        <button type="button" id="mapAll">🇩🇿 <span data-i18n="map.all"></span></button>
+      </div>
+      <div class="map-hint" id="mapHint" data-i18n="map.hint"></div>
+    </div>
+  </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/i18n.js"></script>
+<script src="js/layout.js?v=3"></script>
+<script src="js/search.js?v=3"></script>
+<script src="js/map.js?v=3"></script>
+<script>
+document.addEventListener('darek:ready', ()=>{
+  const sortSel = document.getElementById('sort');
+  const split = document.getElementById('split');
+  const moveCb = document.getElementById('moveSearch');
+  let state = stateFromURL();
+  const mobile = matchMedia('(max-width:900px)').matches;
+  let view = qs('view') || (mobile ? 'list' : 'split');
+
+  /* --- Carte --- */
+  const dmap = DarekMap(document.getElementById('map'), {
+    onWilaya(w){ moveCb.checked = false; state.loc = w; mountSearch(); run(state, true); },
+    onMove(){ if(moveCb.checked) run(state, true, true); document.getElementById('mapHint').style.display = dmap && dmap.map.getZoom()>=DETAIL_ZOOM ? 'none' : ''; }
+  });
+
+  function setView(v){
+    view = v;
+    split.className = 'results-split ' + (v==='list'?'list-only':v==='map'?'map-only':'');
+    document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
+    dmap.invalidate();
+  }
+  document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{ setView(b.dataset.view); run(state, true); });
+  document.getElementById('mapAll').onclick = ()=>{ moveCb.checked=false; state.loc=''; mountSearch(); dmap.reset(); run(state, true); };
+  moveCb.onchange = ()=>{ if(moveCb.checked){ state.loc=''; mountSearch(); } run(state, true); };
+
+  /* --- Barre de recherche (re-montée quand la carte change la localisation) --- */
+  function mountSearch(){
+    const old = document.getElementById('search'), fresh = old.cloneNode(false);
+    old.replaceWith(fresh);
+    SearchBox(fresh, {state:{...state, rooms:[...state.rooms]}, onSearch:s=>{ moveCb.checked=false; run(s); }});
+  }
+
+  function chips(s){
+    const out = [];
+    if(s.loc) out.push(`<span class="loc-chip" id="clearLoc">📍 ${s.loc} ✕</span>`);
+    if(moveCb.checked) out.push(`<span class="loc-chip">🗺 ${t('map.inArea')}</span>`);
+    if(s.type) out.push(tv(s.type));
+    if(s.rooms.length) out.push(t('f.rooms')+' : '+s.rooms.map(r=>r==='5'?'5+':r).join(', '));
+    if(s.dur) out.push(tv(s.dur));
+    if(s.pmin||s.pmax) out.push(t('f.price')+' : '+(s.pmin?fmtNum(s.pmin):'0')+' – '+(s.pmax?fmtNum(s.pmax):'∞')+' DA');
+    if(s.smin||s.smax) out.push((s.smin||0)+' – '+(s.smax||'∞')+' m²');
+    if(s.year) out.push(t('f.yearAfter')+' '+s.year);
+    if(s.heat) out.push(tv(s.heat));
+    if(s.cond) out.push(tv(s.cond));
+    if(s.coloc) out.push(t('f.roommates')+' ≤ '+s.coloc);
+    if(s.sdb) out.push(t('f.bathrooms')+' '+s.sdb+'+');
+    if(s.arr) out.push(fmtDate(s.arr)+(s.dep?' → '+fmtDate(s.dep):''));
+    if(s.guests) out.push(s.guests+' '+t('card.guests'));
+    Object.keys(TRI).forEach(k=>{ if(s[k]) out.push(t(TRI[k])+' : '+t(s[k]==='1'?'f.yes':'f.no')); });
+    return out.map(x=> x.startsWith('<span') ? x : `<span>${x}</span>`).join('');
+  }
+
+  function run(s, fromMap, skipMap){
+    const locChanged = s.loc !== state.loc || !fromMap;
+    state = s;
+    const q = stateToQuery(s) + (view!=='split' && !mobile ? '&view='+view : '');
+    history.replaceState(null,'','annonces.html?'+q);
+    document.querySelectorAll('.main-nav a').forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='annonces.html?mode='+s.mode));
+
+    // la carte montre toutes les wilayas (filtres appliqués sauf la localisation) pour pouvoir changer de wilaya
+    if(!skipMap) dmap.setItems(filterListings({...s, loc:''}), s.loc);
+    if(!fromMap && locChanged){ if(!s.loc || !dmap.focusWilaya(s.loc)) dmap.reset(); }
+
+    let list = filterListings(s);
+    if(moveCb.checked) list = filterListings({...s, loc:''}).filter(l=>dmap.inBounds(l));
+    const so = sortSel.value;
+    if(so==='asc') list.sort((a,b)=>a.price-b.price);
+    else if(so==='desc') list.sort((a,b)=>b.price-a.price);
+    else if(so==='surface') list.sort((a,b)=>b.surface-a.surface);
+    else list.sort((a,b)=>b.posted.localeCompare(a.posted));
+
+    document.getElementById('resTitle').textContent = `${list.length} ${t('res.title')} — ${t('mode.'+s.mode)}${s.loc?' · '+s.loc:''}`;
+    document.getElementById('activeFilters').innerHTML = chips(s);
+    const cl = document.getElementById('clearLoc');
+    if(cl) cl.onclick = ()=>{ state.loc=''; mountSearch(); dmap.reset(); run(state, true); };
+    document.getElementById('results').innerHTML = list.length ? list.map(cardHTML).join('')
+      : `<div class="empty" style="grid-column:1/-1"><h3>${t('res.empty')}</h3><p>${t('res.emptySub')}</p></div>`;
+    document.querySelectorAll('#results .card').forEach(c=>{
+      c.href += '&back=' + encodeURIComponent(location.search);
+      const id = new URL(c.href).searchParams.get('id');
+      c.onmouseenter = ()=>dmap.highlight(id, true);
+      c.onmouseleave = ()=>dmap.highlight(id, false);
+    });
+  }
+
+  mountSearch();
+  sortSel.onchange = ()=>run(state, true);
+  setView(view);
+  run(state);
+});
+</script>
+</body>
+</html>

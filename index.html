@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Darek — Immobilier de particulier à particulier</title>
+<meta name="description" content="Vente, location, colocation et vacances entre particuliers en Algérie. Sans agence, sans commission.">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+<div id="site-header"></div>
+
+<section class="hero">
+  <div class="container">
+    <h1 data-i18n="hero.title"></h1>
+    <p class="lead" data-i18n="hero.lead"></p>
+    <div id="search"></div>
+    <div class="hero-badges"><span data-i18n="hero.b1"></span><span data-i18n="hero.b2"></span><span data-i18n="hero.b3"></span></div>
+  </div>
+</section>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat"><b id="statCount">—</b><span data-i18n="stat.1"></span></div>
+    <div class="stat"><b>58</b><span data-i18n="stat.2"></span></div>
+    <div class="stat"><b>0 %</b><span data-i18n="stat.3"></span></div>
+    <div class="stat"><b>2,5 %</b><span data-i18n="stat.4"></span></div>
+  </div>
+</div>
+
+<section class="block">
+  <div class="container">
+    <div class="section-head"><div><h2 data-i18n="home.modesTitle"></h2><p data-i18n="home.modesSub"></p></div></div>
+    <div class="mode-cards" id="modeCards"></div>
+  </div>
+</section>
+
+<section class="block" style="padding-top:0">
+  <div class="container">
+    <div class="section-head">
+      <div><span class="eyebrow">Carte</span><h2 data-i18n="map.title"></h2><p data-i18n="map.sub"></p></div>
+      <div class="map-modes" id="mapModes"></div>
+    </div>
+    <div class="home-map-wrap"><div class="home-map" id="homeMap"></div><div class="map-hint" data-i18n="map.hint"></div></div>
+  </div>
+</section>
+
+<section class="block" style="padding-top:0">
+  <div class="container">
+    <div class="section-head">
+      <div><h2 data-i18n="home.latest"></h2><p data-i18n="home.latestSub"></p></div>
+      <a href="annonces.html?mode=vente" class="btn btn-ghost" data-i18n="home.seeAll"></a>
+    </div>
+    <div class="grid-listings" id="latest"></div>
+  </div>
+</section>
+
+<section class="block" style="background:#fff">
+  <div class="container">
+    <div class="section-head"><div><span class="eyebrow">Darek</span><h2 data-i18n="home.howTitle"></h2></div>
+      <a href="comment-ca-marche.html" class="btn btn-ghost" data-i18n="nav.how"></a></div>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3 data-i18n="home.s1t"></h3><p data-i18n="home.s1p"></p></div>
+      <div class="step"><div class="num">2</div><h3 data-i18n="home.s2t"></h3><p data-i18n="home.s2p"></p></div>
+      <div class="step"><div class="num">3</div><h3 data-i18n="home.s3t"></h3><p data-i18n="home.s3p"></p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="container">
+    <div class="cta-band">
+      <div><h2 data-i18n="home.ctaTitle"></h2><p data-i18n="home.ctaSub"></p></div>
+      <a href="publier.html" class="btn btn-publish btn-lg" data-i18n="nav.publish"></a>
+    </div>
+  </div>
+</section>
+
+<div id="site-footer"></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/i18n.js"></script>
+<script src="js/layout.js?v=3"></script>
+<script src="js/search.js?v=3"></script>
+<script src="js/map.js?v=3"></script>
+<script>
+document.addEventListener('darek:ready', ()=>{
+  SearchBox(document.getElementById('search'), {state:{...stateFromURL(), mode:'vente'}});
+  document.getElementById('statCount').textContent = fmtNum(12480 + LISTINGS.length);
+  const imgs = {vente:IMG.villa3, location:IMG.liv1, colocation:IMG.liv3, vacances:IMG.villa2};
+  document.getElementById('modeCards').innerHTML = MODES.map(m=>`
+    <a class="mode-card" href="annonces.html?mode=${m}" style="background-image:url('${imgs[m]}')">
+      <div><h3>${t('mode.'+m)}</h3><p>${t('home.m.'+m)} · ${LISTINGS.filter(l=>l.mode===m).length} ${t('res.title')}</p></div></a>`).join('');
+  const latest = MODES.flatMap(m=>LISTINGS.filter(l=>l.mode===m).slice(0,2));
+  document.getElementById('latest').innerHTML = latest.map(cardHTML).join('');
+  // Carte : clic sur une wilaya → page résultats filtrée sur cette wilaya
+  let mapMode = 'vente';
+  const hm = DarekMap(document.getElementById('homeMap'), {scroll:false,
+    onWilaya(w){ location.href = `annonces.html?mode=${mapMode}&loc=${encodeURIComponent(w)}`; }});
+  const drawModes = ()=>{
+    document.getElementById('mapModes').innerHTML = MODES.map(m=>`<button class="chip ${m===mapMode?'on':''}" data-mm="${m}">${t('mode.'+m)}</button>`).join('');
+    hm.setItems(LISTINGS.filter(l=>l.mode===mapMode));
+  };
+  document.getElementById('mapModes').onclick = e=>{ const b=e.target.closest('[data-mm]'); if(b){ mapMode=b.dataset.mm; drawModes(); hm.reset(); } };
+  drawModes(); hm.reset();
+});
+</script>
+</body>
+</html>

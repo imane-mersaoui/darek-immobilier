@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Publier une annonce — Darek</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+<div id="site-header"></div>
+<div class="page-hero"><div class="container"><div class="crumbs">Darek › <span data-i18n="nav.publish"></span></div><h1 data-i18n="p.title"></h1><p data-i18n="p.sub"></p></div></div>
+
+<main class="container wizard">
+  <div class="wsteps" id="wsteps"></div>
+  <form class="wpane" id="wpane" novalidate></form>
+</main>
+
+<div id="site-footer"></div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/data.js?v=3"></script>
+<script src="js/i18n.js"></script>
+<script src="js/layout.js?v=3"></script>
+<script src="js/map.js?v=3"></script>
+<script>
+document.addEventListener('darek:ready', ()=>{
+  const u = currentUser();
+  const d = {mode:'', type:'', title:'', city:'', district:'', rooms:'', surface:'', price:'', description:'',
+             year:'', furnished:'', parking:'', heating:'', elevator:'', condition:'', negotiable:'', accessible:'', duration:'',
+             roommates:'', bathrooms:'', commonRoom:'', guests:'', internet:'', kitchen:'',
+             lat:null, lng:null, photos:[], name:u?.name||'', phone:u?.phone||'', email:u?.email||'', accept:false};
+  let step = 1;
+  const steps = ['p.s1','p.s2','p.s3','p.s4','p.s5'];
+  const pane = document.getElementById('wpane');
+  const icons = {vente:'🏠',location:'🔑',colocation:'👥',vacances:'🌴'};
+
+  const row = (label, inner, full) => `<div class="form-row ${full?'full':''}"><label>${label}</label>${inner}</div>`;
+  const inp = (k, type='text', ph='') => `<input type="${type}" data-k="${k}" value="${d[k]}" placeholder="${ph}">`;
+  const select = (k, list) => `<select data-k="${k}"><option value="">—</option>${list.map(v=>`<option value="${v}" ${d[k]===v?'selected':''}>${tv(v)}</option>`).join('')}</select>`;
+  const yesno = k => `<div class="seg" data-seg="${k}">${[['1','f.yes'],['0','f.no']].map(([v,l])=>`<button type="button" data-v="${v}" class="${d[k]===v?'on':''}">${t(l)}</button>`).join('')}</div>`;
+  const priceLabel = () => t(d.mode==='vacances'?'f.priceNight':'f.price') + ' (DA' + (d.mode==='location'||d.mode==='colocation' ? ' '+t('card.month') : '') + ') *';
+
+  function features(){
+    const m = d.mode, out = [];
+    if(m==='vente'||m==='location'){
+      out.push(row(t('f.year'), inp('year','number','2015')), row(t('f.heating'), select('heating',CHAUFFAGES)), row(t('f.condition'), select('condition',ETATS)));
+      if(m==='location') out.push(row(t('f.duration'), select('duration',DUREES)));
+      ['furnished:f.furnished','parking:f.parking','elevator:f.elevator','negotiable:f.negotiable','accessible:f.access'].forEach(x=>{const [k,l]=x.split(':'); out.push(row(t(l), yesno(k)));});
+    } else if(m==='colocation'){
+      out.push(row(t('f.roommates'), inp('roommates','number','3')), row(t('f.bathrooms').replace(/ \(.*\)/,''), inp('bathrooms','number','1')), row(t('f.duration'), select('duration',DUREES)));
+      ['commonRoom:f.common','furnished:f.furnished','parking:f.parking','elevator:f.elevator','accessible:f.access'].forEach(x=>{const [k,l]=x.split(':'); out.push(row(t(l), yesno(k)));});
+    } else {
+      out.push(row(t('f.guests'), inp('guests','number','4')));
+      ['furnished:f.furnished','parking:f.parking','elevator:f.elevator','accessible:f.access','internet:f.internet','kitchen:f.kitchen'].forEach(x=>{const [k,l]=x.split(':'); out.push(row(t(l), yesno(k)));});
+    }
+    return out.join('');
+  }
+
+  function render(err){
+    document.getElementById('wsteps').innerHTML = steps.map((s,i)=>`<div class="${i+1===step?'on':i+1<step?'done':''}"><i>${i+1<step?'✓':i+1}</i>${t(s)}</div>`).join('');
+    let h = '';
+    if(step===1){
+      h = `<h2>${t('p.s1h')}</h2><p class="sub">${t('p.s1p')}</p><div class="choice-grid">${MODES_P.map(m=>`<div class="choice ${d.mode===m?'on':''}" data-mode="${m}"><div class="ic">${icons[m]}</div><b>${t('p.c.'+m)}</b><small>${t('mode.'+m)}</small></div>`).join('')}</div>`;
+    } else if(step===2){
+      h = `<h2>${t('p.s2h')}</h2><p class="sub">${t('mode.'+d.mode)}</p><div class="form-grid">
+        ${row(t('f.type')+' *', select('type',TYPES[d.mode]))}
+        ${row(t('p.titleF')+' *', inp('title','text',t('p.titlePh')))}
+        ${row(t('p.wilaya')+' *', select('city',WILAYAS))}
+        ${row(t('p.commune'), inp('district','text','Hydra, Kouba…'))}
+        ${row(t('f.rooms'), inp('rooms','number','3'))}
+        ${row(t('f.surface')+' *', inp('surface','number','90'))}
+        ${row(priceLabel(), inp('price','number'))}
+        ${row(t('p.descF'), `<textarea data-k="description" rows="5">${d.description}</textarea>`, true)}
+        ${row(t('d.location'), `<div class="pick-map" id="pickMap"></div><small style="color:var(--muted)">${t('p.mapHint')}</small>`, true)}
+      </div>`;
+    } else if(step===3){
+      h = `<h2>${t('p.s3h')}</h2><p class="sub">${tv(d.type)} · ${t('mode.'+d.mode)}</p><div class="form-grid">${features()}</div>`;
+    } else if(step===4){
+      h = `<h2>${t('p.s4h')}</h2><p class="sub">${t('p.s4p')}</p>
+        <label class="dropzone" id="drop"><div style="font-size:34px">📷</div><b>${t('p.drop')}</b><input type="file" accept="image/*" multiple hidden id="files"></label>
+        <div class="thumbs">${d.photos.map((p,i)=>`<div style="background-image:url('${p}')"><button type="button" data-rm="${i}">×</button></div>`).join('')}</div>`;
+    } else {
+      h = `<h2>${t('p.s5h')}</h2><p class="sub">${t('p.s5p')}</p><div class="form-grid">
+        ${row(t('a.fullname')+' *', inp('name'))}${row(t('a.phone')+' *', inp('phone','tel','05 xx xx xx xx'))}
+        ${row(t('a.email'), inp('email','email'), true)}
+        <label class="full" style="display:flex;gap:10px;align-items:flex-start;font-size:14px;margin-top:6px"><input type="checkbox" id="accept" ${d.accept?'checked':''} style="margin-top:4px"> ${t('p.accept')}</label>
+      </div>`;
+    }
+    h += err ? `<div class="err">${err}</div>` : '';
+    h += `<div class="wnav">${step>1?`<button type="button" class="btn btn-ghost" data-nav="-1">← ${t('p.prev')}</button>`:'<span></span>'}
+      ${step<5?`<button type="button" class="btn btn-navy" data-nav="1">${t('p.next')} →</button>`:`<button type="button" class="btn btn-primary btn-lg" id="publish">${t('p.publish')}</button>`}</div>`;
+    pane.innerHTML = h;
+    if(step===2) initPick();
+    const files = document.getElementById('files');
+    if(files){
+      files.onchange = ()=>addFiles(files.files);
+      const drop = document.getElementById('drop');
+      drop.ondragover = e=>{e.preventDefault();}; drop.ondrop = e=>{e.preventDefault(); addFiles(e.dataTransfer.files);};
+    }
+  }
+  const MODES_P = ['vente','location','colocation','vacances'];
+  let pick = null, pin = null;
+  const pinIcon = L.divIcon({className:'', iconSize:[30,30], iconAnchor:[15,30], html:'<div style="font-size:30px;line-height:30px">📍</div>'});
+  function initPick(){
+    const c = d.lat!=null ? [d.lat,d.lng] : (WILAYA_GEO[d.city] || ALGERIA_CENTER);
+    pick = makeBaseMap(document.getElementById('pickMap'), {center:c, zoom:d.lat!=null?15:(d.city?11:5), scroll:false});
+    pin = d.lat!=null ? L.marker(c,{icon:pinIcon}).addTo(pick) : null;
+    pick.on('click', e=>{ d.lat=+e.latlng.lat.toFixed(5); d.lng=+e.latlng.lng.toFixed(5);
+      if(pin) pin.setLatLng(e.latlng); else pin = L.marker(e.latlng,{icon:pinIcon}).addTo(pick); });
+  }
+
+  function addFiles(list){
+    [...list].slice(0, 10-d.photos.length).forEach(f=>{
+      const r = new FileReader();
+      r.onload = ()=>{ const img = new Image(); img.onload = ()=>{
+        const c = document.createElement('canvas'), sc = Math.min(1, 900/img.width);
+        c.width = img.width*sc; c.height = img.height*sc; c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        d.photos.push(c.toDataURL('image/jpeg',.72)); render(); }; img.src = r.result; };
+      r.readAsDataURL(f);
+    });
+  }
+
+  function valid(){
+    if(step===1) return !!d.mode;
+    if(step===2) return d.type && d.title.trim() && d.city && d.surface && d.price;
+    if(step===5) return d.name.trim() && d.phone.trim() && d.accept;
+    return true;
+  }
+
+  pane.addEventListener('input', e=>{ const k=e.target.dataset.k; if(k) d[k]=e.target.value;
+    if(k==='city' && pick && d.lat==null && WILAYA_GEO[d.city]) pick.setView(WILAYA_GEO[d.city], 11); if(e.target.id==='accept') d.accept=e.target.checked; });
+  pane.addEventListener('change', e=>{ if(e.target.id==='accept') d.accept=e.target.checked; });
+  pane.addEventListener('click', e=>{
+    const m = e.target.closest('[data-mode]'); if(m){ if(d.mode!==m.dataset.mode){ d.type=''; } d.mode=m.dataset.mode; render(); return; }
+    const sg = e.target.closest('.seg button'); if(sg){ d[sg.parentElement.dataset.seg]=sg.dataset.v; sg.parentElement.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===sg)); return; }
+    const rm = e.target.closest('[data-rm]'); if(rm){ e.preventDefault(); d.photos.splice(+rm.dataset.rm,1); render(); return; }
+    const nv = e.target.closest('[data-nav]');
+    if(nv){ const dir=+nv.dataset.nav; if(dir>0 && !valid()) return render(t('p.required')); step+=dir; render(); window.scrollTo({top:0,behavior:'smooth'}); return; }
+    if(e.target.id==='publish'){
+      if(!valid()) return render(t('p.required'));
+      const b = v => v==='' ? null : v==='1';
+      const id = 'U' + Date.now().toString().slice(-6);
+      const N = {id, lat:d.lat, lng:d.lng, mode:d.mode, type:d.type, title:d.title.trim(), city:d.city, district:d.district.trim()||d.city,
+        rooms:+d.rooms||0, surface:+d.surface, price:+d.price, year:+d.year||null,
+        furnished:b(d.furnished), parking:b(d.parking), heating:d.heating||'Aucun', elevator:b(d.elevator), condition:d.condition||'Bon état',
+        negotiable:b(d.negotiable), accessible:b(d.accessible), duration:d.duration||null, roommates:+d.roommates||null, bathrooms:+d.bathrooms||1,
+        commonRoom:b(d.commonRoom), guests:+d.guests||null, internet:b(d.internet), kitchen:b(d.kitchen), booked:[],
+        images:d.photos.length?d.photos:[IMG.apt1], description:d.description||DESC[d.mode],
+        owner:{name:d.name.trim(), since:new Date().getFullYear(), phone:d.phone}, posted:new Date().toISOString().slice(0,10)};
+      const mine = store.get('darek_listings', []);
+      mine.unshift(N);
+      try{ localStorage.setItem('darek_listings', JSON.stringify(mine)); }
+      catch(err){ N.images=[IMG.apt1]; store.set('darek_listings', [N].concat(mine.slice(1))); }
+      toast(t('p.done'));
+      setTimeout(()=>location.href='bien.html?id='+id, 900);
+    }
+  });
+  render();
+});
+</script>
+</body>
+</html>
